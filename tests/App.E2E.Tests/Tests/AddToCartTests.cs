@@ -1,0 +1,34 @@
+using App.E2E.Tests.Pages;
+using Microsoft.Playwright;
+using System.Text.RegularExpressions;
+using TestInfrastructure.PageObjects;
+using Xunit;
+
+namespace App.E2E.Tests.Tests;
+
+public class AddToCartTests : IAsyncLifetime
+{
+    private BrowserSession _session = null!;
+
+    public async ValueTask InitializeAsync() => _session = await BrowserSession.StartAsync(false);
+
+    public async ValueTask DisposeAsync() => await _session.DisposeAsync();
+
+    [Fact]
+    public async Task Searching_and_adding_a_product_updates_the_cart_count()
+    {
+        var page = _session.Page;
+        await page.GotoAsync("http://localhost:5178/");
+
+        // Product cards load asynchronously; wait for them before creating the page object.
+        await page.GetByTestId("catalog-result-count").WaitForAsync();
+        var catalog = await PageObject.CreateAsync<CatalogPage>(page);
+
+        await catalog.Content.Search.FillAsync("notebook");
+        await Assertions.Expect(catalog.Content.ResultCount.Locator).ToHaveTextAsync("1 product(s) found");
+
+        await catalog.Content.FieldNotebook.AddToCart.ClickAsync();
+
+        await Assertions.Expect(catalog.Cart.Locator).ToHaveTextAsync(new Regex(@"Cart \(1\)"));
+    }
+}
