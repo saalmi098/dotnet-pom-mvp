@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Reflection;
 using Microsoft.Playwright;
 using TestInfrastructure.Attributes;
@@ -41,9 +42,26 @@ public abstract class PageObject
         return pageObject;
     }
 
-    /// <summary>Populates attributed properties and waits for each (recursively for nested page objects).</summary>
-    public async Task InitializeAsync()
+    /// <summary>
+    /// Same as <see cref="CreateAsync{T}(IPage)"/>, scoped to a container locator
+    /// (e.g. a tab panel that only exists after the tab was activated).
+    /// </summary>
+    public static async Task<T> CreateAsync<T>(ILocator root) where T : PageObject
     {
+        var pageObject = (T)Activator.CreateInstance(typeof(T), root)!;
+        await pageObject.InitializeAsync();
+        return pageObject;
+    }
+
+    /// <summary>Populates attributed properties and waits for each (recursively for nested page objects).</summary>
+    public Task InitializeAsync() => InitializeAsync(0);
+
+    private async Task InitializeAsync(int depth)
+    {
+        var name = GetType().Name;
+        var total = Stopwatch.StartNew();
+        PageObjectLog.Write(depth, $"creating page object {name}");
+
         var props = GetType()
             .GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
             .Where(p => p.GetCustomAttribute<LocatorAttribute>() != null);
@@ -52,13 +70,18 @@ public abstract class PageObject
         {
             var locator = prop.GetCustomAttribute<LocatorAttribute>()!.Resolve(Root);
             var value = Activator.CreateInstance(prop.PropertyType, locator)
-                ?? throw new InvalidOperationException($"Cannot create {prop.PropertyType} for {GetType().Name}.{prop.Name}.");
+                ?? throw new InvalidOperationException($"Cannot create {prop.PropertyType} for {name}.{prop.Name}.");
             prop.SetValue(this, value);
 
+            PageObjectLog.Write(depth + 1, $"waiting for {name}.{prop.Name} to be visible");
+            var wait = Stopwatch.StartNew();
             await locator.WaitForAsync(new LocatorWaitForOptions { State = WaitForSelectorState.Visible });
+            PageObjectLog.Write(depth + 1, $"{name}.{prop.Name} visible after {wait.ElapsedMilliseconds} ms");
 
             if (value is PageObject nested)
-                await nested.InitializeAsync();
+                await nested.InitializeAsync(depth + 1);
         }
+
+        PageObjectLog.Write(depth, $"page object {name} ready after {total.ElapsedMilliseconds} ms");
     }
 }

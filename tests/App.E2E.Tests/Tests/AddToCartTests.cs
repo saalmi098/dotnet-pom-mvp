@@ -6,18 +6,12 @@ using Xunit;
 
 namespace App.E2E.Tests.Tests;
 
-public class AddToCartTests : IAsyncLifetime
+public class AddToCartTests : PlaywrightTestBase
 {
-    private BrowserSession _session = null!;
-
-    public async ValueTask InitializeAsync() => _session = await BrowserSession.StartAsync(false);
-
-    public async ValueTask DisposeAsync() => await _session.DisposeAsync();
-
     [Fact]
     public async Task Searching_and_adding_a_product_updates_the_cart_count()
     {
-        var page = _session.Page;
+        var page = Session.Page;
         await page.GotoAsync("http://localhost:5178/");
 
         // Product cards load asynchronously; wait for them before creating the page object.
