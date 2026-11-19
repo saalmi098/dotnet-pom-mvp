@@ -23,14 +23,6 @@ public abstract class PageObject
 
     public ILocator Root { get; }
 
-    /// <summary>Creates the page object, populates attributed properties, waits until all are visible.</summary>
-    public static async Task<T> CreateAsync<T>(Func<T> factory) where T : PageObject
-    {
-        var pageObject = factory();
-        await pageObject.InitializeAsync();
-        return pageObject;
-    }
-
     /// <summary>
     /// Creates the page object via reflection (bypasses C# 'required' checks, since properties are
     /// populated by <see cref="InitializeAsync"/>), then initializes it.
@@ -75,11 +67,14 @@ public abstract class PageObject
 
             PageObjectLog.Write(depth + 1, $"waiting for {name}.{prop.Name} to be visible");
             var wait = Stopwatch.StartNew();
+
             await locator.WaitForAsync(new LocatorWaitForOptions { State = WaitForSelectorState.Visible });
             PageObjectLog.Write(depth + 1, $"{name}.{prop.Name} visible after {wait.ElapsedMilliseconds} ms");
 
             if (value is PageObject nested)
+            {
                 await nested.InitializeAsync(depth + 1);
+            }
         }
 
         PageObjectLog.Write(depth, $"page object {name} ready after {total.ElapsedMilliseconds} ms");
